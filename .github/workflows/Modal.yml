@@ -3,6 +3,11 @@ name: Modal 容器扎针
 on:
   workflow_dispatch:
     inputs:
+      custom_app_name:
+        description: '自定义部署名称（仅小写字母、数字、短横线，将作为 modal.run 的子域名）'
+        required: false
+        default: ''
+        type: string
       deploy_region:
         description: '选择部署区域（Broad 自动分配 / Specific 精确指定）'
         required: false
@@ -249,6 +254,22 @@ jobs:
             echo "✅ NEZHA_PORT: 使用 Secret"
           fi
 
+      - name: 设置自定义部署名称
+        run: |
+          if [ -n "${{ github.event.inputs.custom_app_name }}" ]; then
+            CUSTOM_NAME="${{ github.event.inputs.custom_app_name }}"
+            # 校验格式：只允许小写字母、数字、短横线
+            if [[ ! "$CUSTOM_NAME" =~ ^[a-z0-9-]+$ ]]; then
+              echo "::error::自定义名称只能包含小写字母、数字和短横线"
+              exit 1
+            fi
+            echo "MODAL_APP_NAME=$CUSTOM_NAME" >> $GITHUB_ENV
+            echo "✅ 自定义应用名称: $CUSTOM_NAME"
+          else
+            echo "MODAL_APP_NAME=app" >> $GITHUB_ENV
+            echo "使用默认应用名称: app"
+          fi
+
       - name: 检出代码仓库
         uses: actions/checkout@v4
         with:
@@ -287,6 +308,7 @@ jobs:
         run: |
           echo "🚀 正在部署到Modal..."
           echo "   📍 区域: $DEPLOY_REGION ($REGION_DESC)"
+          echo "   🏷️  应用名称: $MODAL_APP_NAME"
           OUTPUT=$(modal deploy app.py 2>&1)
           echo "$OUTPUT"
 
