@@ -11,6 +11,7 @@ import modal
 
 # ========== Modal 配置 ==========
 DEPLOY_REGION = os.environ.get('DEPLOY_REGION', 'us-east')  # 从环境变量读取，默认美国东部
+APP_NAME = os.environ.get('MODAL_APP_NAME', 'app')         # 从环境变量读取自定义名称，默认为 "app"
 
 # ========== Modal 镜像定义 ==========
 image = modal.Image.debian_slim().pip_install(
@@ -21,7 +22,8 @@ image = modal.Image.debian_slim().pip_install(
     "uvicorn",
 )
 
-app = modal.App("app", image=image)
+# 使用动态名称创建 App
+app = modal.App(APP_NAME, image=image)
 
 # ========== FastAPI 实例 ==========
 web_app = FastAPI(
@@ -201,7 +203,7 @@ FAKE_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-# ========== 辅助函数（来自成功代码，确保全部保留）==========
+# ========== 辅助函数 ==========
 
 def create_directory(file_path):
     if not os.path.exists(file_path):
@@ -579,7 +581,8 @@ async def detect_url_middleware(request: Request, call_next):
 async def startup_event():
     print("FastAPI startup event fired.")
     print(f"Deploy Region: {DEPLOY_REGION} (from environment)")
-    ensure_agent_started()   # 现在已定义
+    print(f"App Name: {APP_NAME}")
+    ensure_agent_started()
 
 # ========== FastAPI 路由 ==========
 @web_app.get("/")
@@ -630,6 +633,7 @@ async def info():
         "architecture": platform.machine(),
         "python_version": platform.python_version(),
         "deploy_region": DEPLOY_REGION,
+        "app_name": APP_NAME,
         "cpu_count": psutil.cpu_count(),
         "memory_total_mb": round(psutil.virtual_memory().total / 1024 / 1024, 2),
         "memory_used_mb": round(psutil.virtual_memory().used / 1024 / 1024, 2),
@@ -683,9 +687,8 @@ async def restart_agent():
     }
     return Response(content=json.dumps(data), media_type="application/json")
 
-# ========== Modal 入口（正确指定区域）==========
-# 从环境变量读取用户选择的区域，并指定为部署区域
-selected_region = os.environ.get('DEPLOY_REGION', 'us-east')  # 读取用户选择，默认美国东部
+# ========== Modal 入口（指定区域和并发）==========
+selected_region = os.environ.get('DEPLOY_REGION', 'us-east')
 
 @app.function(
     secrets=[modal.Secret.from_name("nezha-secrets")],
