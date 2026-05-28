@@ -330,27 +330,60 @@ jobs:
         run: |
           echo "⏳ 等待部署稳定..."
           sleep 10
-          echo "📡 发送初始请求到: $DEPLOY_URL/health"
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOY_URL/health" || echo "000")
-          echo "第1次请求 -> HTTP $HTTP_STATUS"
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "冷启动中，15秒后重试..."
-            sleep 15
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOY_URL/health" || echo "000")
-            echo "第2次请求 -> HTTP $HTTP_STATUS"
+
+          # 定义检查函数，自动捕获禁用错误
+          check_response() {
+            local url="$1"
+            local attempt="$2"
+            # 同时获取响应体和状态码
+            RESPONSE=$(curl -s -w "\n%{http_code}" "$url" 2>&1 || echo "000")
+            HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            echo "第${attempt}次请求 -> HTTP $HTTP_STATUS"
+
+            if [ "$HTTP_STATUS" != "200" ]; then
+              # 捕获 Modal 工作空间被禁用的错误
+              if echo "$BODY" | grep -qi "modal-http: workspace.*disabled"; then
+                echo "❌ 错误：Modal 工作空间已被禁用，可能是免费额度已用完。"
+                echo "响应内容：$BODY"
+                exit 1
+              fi
+              return 1
+            fi
+            return 0
+          }
+
+          # 第 1 次尝试
+          if check_response "$DEPLOY_URL/health" 1; then
+            echo "✅ 保活触发成功！"
+            echo "   📍 区域: $DEPLOY_REGION ($REGION_DESC)"
+            echo "   🔗 URL: $DEPLOY_URL"
+            exit 0
           fi
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "再等20秒重试最后一次..."
-            sleep 20
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOY_URL/health" || echo "000")
-            echo "第3次请求 -> HTTP $HTTP_STATUS"
+
+          echo "冷启动中，15秒后重试..."
+          sleep 15
+
+          # 第 2 次尝试
+          if check_response "$DEPLOY_URL/health" 2; then
+            echo "✅ 保活触发成功！"
+            echo "   📍 区域: $DEPLOY_REGION ($REGION_DESC)"
+            echo "   🔗 URL: $DEPLOY_URL"
+            exit 0
           fi
-          if [ "$HTTP_STATUS" = "200" ]; then
+
+          echo "再等20秒重试最后一次..."
+          sleep 20
+
+          # 第 3 次尝试
+          if check_response "$DEPLOY_URL/health" 3; then
             echo "✅ 保活触发成功！"
             echo "   📍 区域: $DEPLOY_REGION ($REGION_DESC)"
             echo "   🔗 URL: $DEPLOY_URL"
           else
+            # 最后一次失败时，打印部分响应便于调试
             echo "⚠️ 返回 HTTP $HTTP_STATUS，容器可能仍在启动中"
+            echo "响应内容前200字符：${BODY:0:200}"
           fi
 
       - name: 清理历史运行记录
