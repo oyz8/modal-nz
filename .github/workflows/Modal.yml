@@ -331,11 +331,10 @@ jobs:
           echo "⏳ 等待部署稳定..."
           sleep 10
 
-          # 定义检查函数，自动捕获禁用错误
+          # 检查函数：同时获取响应体和状态码，自动捕获工作空间禁用错误
           check_response() {
             local url="$1"
             local attempt="$2"
-            # 同时获取响应体和状态码
             RESPONSE=$(curl -s -w "\n%{http_code}" "$url" 2>&1 || echo "000")
             HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
             BODY=$(echo "$RESPONSE" | sed '$d')
