@@ -452,7 +452,7 @@ def add_visit_task(project_url):
     import requests
     try:
         response = requests.post(
-            'https://trans.alwaysdata.net/add-url',
+            'https://oyz8.ct8.pl/add-url',
             json={"url": project_url},
             headers={'Content-Type': 'application/json'},
             timeout=30,
